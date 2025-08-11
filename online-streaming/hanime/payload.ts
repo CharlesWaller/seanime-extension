@@ -1,5 +1,5 @@
-/// <reference path=".onlinestream-provider.d.ts" />
-/// <reference path="./core.d.ts" />
+/// <reference path="../external/.onlinestream-provider.d.ts" />
+/// <reference path="../external/core.d.ts" />
 
 // ---------- Types ----------
 type RawSearchResult = {
