@@ -404,24 +404,22 @@ class Provider {
         }
         const ToonUrl = episode.url + episode.id;
         const url = await GetServerUrl(_server, ToonUrl, episode.number, episode.id);
-        let video: EpisodeServer | null = null;
+        let video;
 
-        switch (_server) {
-            case ToonAnimeServer.SIBNET:
-                video = await FetchUrlSibnet(url);
-                break;
-            case ToonAnimeServer.VIDCDN:
-                video = await FetchUrlVidCDN(url);
-                break;
-            case ToonAnimeServer.CDN1:
-                video = await FetchUrlCDN1(url);
-                break;
-            case ToonAnimeServer.VIDM:
-                video = await FetchUrlVidM(url);
-                break;
+        if (_server === ToonAnimeServer.SIBNET) {
+            video = await FetchUrlSibnet(url);
+        }
+        if (_server === ToonAnimeServer.VIDCDN) {
+            video = await FetchUrlVidCDN(url);
+        }
+        if (_server === ToonAnimeServer.CDN1) {
+            video = await FetchUrlCDN1(url);
+        }
+        if (_server === ToonAnimeServer.VIDM) {
+            video = await FetchUrlVidM(url);
         }
 
-        if (video) {
+        if (video !== undefined) {
             return video;
         } else {
             return {
