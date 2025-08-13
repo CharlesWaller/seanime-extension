@@ -189,7 +189,6 @@ async function FetchUrlSibnet(url?: string): Promise<EpisodeServer | null> {
                 const videoUrl = PlayerContent.split(",")[0]?.split(":")[1]?.trim().replace(/['"]/g, "");
 
                 if (videoUrl) {
-                    console.log(`https://video.sibnet.ru${videoUrl}`);
                     videos.push({
                         url: `https://video.sibnet.ru${videoUrl}`,
                         type: "mp4",
@@ -218,12 +217,75 @@ async function FetchUrlCDN1(url?: string): Promise<EpisodeServer | null> {
 }
 
 async function FetchUrlVidM(url?: string): Promise<EpisodeServer | null> {
+    if (!url) return null;
+    const req = await fetch(url);
+    const html = await req.text();
+    const $ = LoadDoc(html);
+
+    const Scripts = $("script[type='text/javascript']");
+    const videos: VideoSource[] = [];
+
+    for (let i = 0; i < Scripts.length(); i++) {
+        const ScriptContent = Scripts.eq(i).html();
+        if (ScriptContent) {
+            const PlayerContent = DecodeHtml(ScriptContent).split("player.setup(")[1]?.split(");")[0];
+            if (PlayerContent) {
+                const fileSources = PlayerContent.split('"file":"')[1]?.split('"')[0];
+                const req2 = await fetch(fileSources);
+                const m3u8 = await req2.text();
+
+                let qual = "";
+                let m = "";
+
+                m3u8.split("\n").forEach(line => {
+                    if (line.startsWith("#EXT-X-STREAM-INF")) {
+                        qual = line.split("RESOLUTION=")[1]?.split(",")[0] || "unknown";
+                        const width = parseInt(qual.split("x")[0]) || 0;
+
+                        if (width >= 1920) {
+                            qual = "1080p";
+                        } else if (width >= 1280) {
+                            qual = "720p";
+                        } else if (width >= 640) {
+                            qual = "480p";
+                        } else if (width >= 320) {
+                            qual = "360p";
+                        } else {
+                            qual = "unknown";
+                        }
+                    }
+                    else if (line.startsWith("http")) {
+                        m = line;
+                    }
+
+                    if (m && qual) {
+                        videos.push({
+                            url: m,
+                            type: "m3u8",
+                            quality: qual,
+                            subtitles: []
+                        })
+                        m = "";
+                        qual = "";
+                    }
+                });
+
+                return {
+                    server: ToonAnimeServer.VIDM,
+                    headers: {
+                        Referer: url,
+                    },
+                    videoSources: videos,
+                }
+            }
+        }
+    }
+
     return null;
 }
 
 class Provider {
     private readonly SEARCH_URL = "https://api2.toonanime.biz/filter?";
-    private readonly SEARCH_PARAM = "&status=all&genre=&order=default&year=all&limit=21";
     private readonly BASE_URL = "https://www.toonanime.biz/";
 
     getSettings(): Settings {
@@ -291,7 +353,7 @@ class Provider {
 
         const episodes: EpisodeDetails[] = [];
 
-        for(let i = 1; i <= (number ? parseInt(number) : 1); i++) {
+        for (let i = 1; i <= (number ? parseInt(number) : 1); i++) {
             episodes.push({
                 id: id,
                 number: i,
