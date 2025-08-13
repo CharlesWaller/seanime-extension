@@ -5,7 +5,7 @@
   "manifestURI": "https://raw.githubusercontent.com/TropicalFrog3/seanime-extension/refs/heads/main/online-streaming/toonanime/manifest.json",
   "language": "typescript",
   "type": "onlinestream-provider",
-  "description": "...",
+  "description": "ToonAnime est une extension Seanime en français pour regarder des anime doublés (VF) et sous-titrés (VOSTFR) depuis ToonAnime.biz, avec prise en charge multi‑serveurs et intégration de riches métadonnées.",
   "author": "TropicalFrog3",
   "icon": "https://raw.githubusercontent.com/TropicalFrog3/seanime-extension/refs/heads/main/online-streaming/toonanime/favicon.png",
   "website": "",
