@@ -19,7 +19,7 @@ class Provider {
 
     getSettings(): Settings {
         return {
-            episodeServers: ["vidmoly", "vvide0", "jilliandescribecompany", "luluvid", "ups2up"],
+            episodeServers: ["vidmoly", "vvide0", "jilliandescribecompany", "luluvid", "ups2up", "vvide0"],
             supportsDub: false,
         }
     }
