@@ -35,27 +35,31 @@ type MovieDetails = {
 
 enum ScoreWeight {
     // query
-    Title = 3,
+    Title = 3.6,
     // dub
     Language = 2.5,
     // media.format
     SeasonOrFilm = 2.1,
     // year
-    ReleaseDate = 1.2,
+    ReleaseDate = 1,
     // media.episodeCount
-    EpisodeCount = 1.1,
+    EpisodeCount = 1,
+
+    MaxScore = 10,
 }
 
 //#endregion
 
 class Provider {
 
-    //#region constants
+    //#region variables
 
-    readonly SEARCH_URL = "https://french-anime.com/engine/ajax/search.php";
     readonly SEARCH_URL_2 = "https://french-anime.com/&do=search&subaction=search&story=";
     readonly SEARCH_URL_3 = "https://french-anime.com/";
-    readonly SEANIME_API = "http://127.0.0.1:43211/api/v1/proxy?url="
+    // idk yet how to get the api url of seanime, so i just hardcoded it
+    readonly SEANIME_API = "http://127.0.0.1:43211/api/v1/proxy?url=";
+
+    _Server = "";
 
     //#endregion
 
@@ -77,28 +81,9 @@ class Provider {
 
     //#region utility
 
-    private async fetchSearchResults(searchText: string) {
-        const body = new URLSearchParams();
-        body.append("query", searchText);
-        const req = await fetch(this.SEARCH_URL, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Accept": "application/json, text/javascript, */*; q=0.01",
-            },
-            body: body.toString(),
-        });
-
-        const html = await (await req).text();
-        const $ = LoadDoc(html);
-        if ($("span.notfound").length() > 0) {
-            return undefined;
-        }
-        return $;
-    }
-
     private getWordVector(word: string): number[] {
         // Dummy implementation: convert word to a vector of character codes
+        // I'll probably change it one in an other update
         return Array.from(word).map(char => char.charCodeAt(0));
     }
 
@@ -134,27 +119,27 @@ class Provider {
         //          -20% point to total if word query and word text have 10% similarity
         //          -100% point to total if word query and word text have 0% similarity
         // Higher score means better match
+        // below 0 means no match, Warn all my test were correct, but i didn't test them all
 
         if (!text || !query) return 0;
 
         text = text.toLowerCase();
         query = query.toLowerCase();
 
-        const maxScore = 2;
         let score = 0;
         if (text === query)
-            return maxScore * weight;
+            return ScoreWeight.MaxScore * weight;
 
         const textWords = text.split(" ");
         const queryWords = query.split(" ");
 
         for (const word of queryWords) {
             if (textWords.includes(word)) {
-                score += maxScore / textWords.length;
+                score += ScoreWeight.MaxScore / textWords.length;
             }
             else {
                 const similarity = this.getWordSimilarity(word, textWords);
-                score -= similarity * maxScore / textWords.length;
+                score -= similarity * ScoreWeight.MaxScore / textWords.length;
             }
         }
 
@@ -166,32 +151,54 @@ class Provider {
         let bestMovie: MovieJson | undefined;
 
         for (const movie of movies) {
-            let score = 0;
+            let score: number = 0;
+            let balance: number = 0;
             let strOutput = ""
             // TITLE
             score += this.scoreStringMatch(ScoreWeight.Title, movie.title, opts.query);
-            strOutput += `Title: ${movie.title} VS ${opts.query}, Score: ${score}\n`;
+            strOutput += `Title: ${movie.title} VS ${opts.query}, Current Score: ${score}\n`;
 
+            // Gerer au elementtojson
             // // LANGUAGE
             // const queryLang = opts.dub ? "FRENCH" : "VOSTFR";
-            // score += this.scoreStringMatch(ScoreWeight.Language, movie.details.version, queryLang);
-            // strOutput += `Language: ${movie.details.version} VS ${queryLang}, Score: ${score}\n`;
+            // const LangScore = this.scoreStringMatch(ScoreWeight.Language, movie.details.version, queryLang);
+            // score = score + LangScore;
+            // strOutput += `Language: ${movie.details.version} VS ${queryLang}, Score: ${LangScore}\n`;
 
+            // Gerer au elementtojson
             // // SEASON OR FILM
             // const queryFormat = opts.media.format === "MOVIE" ? "Film" : "Saison";
-            // score += this.scoreStringMatch(ScoreWeight.SeasonOrFilm, movie.SeasonOrFilm, queryFormat);
-            // strOutput += `Format: ${movie.SeasonOrFilm} VS ${queryFormat}, Score: ${score}\n`;
+            // const FormatScore = this.scoreStringMatch(ScoreWeight.SeasonOrFilm, movie.SeasonOrFilm, queryFormat);
+            // score = score + FormatScore;
+            // strOutput += `Format: ${movie.SeasonOrFilm} VS ${queryFormat}, Score: ${FormatScore}\n`;
 
-            // // RELEASE DATE
-            // const queryReleaseDate = opts.year?.toString();
-            // score += this.scoreStringMatch(ScoreWeight.ReleaseDate, movie.details.releaseDate, queryReleaseDate);
-            // strOutput += `Release Date: ${movie.details.releaseDate} VS ${queryReleaseDate}, Score: ${score}\n`;
-
-
-            // // EPISODE COUNT
-            // const queryEpisodeCount = opts.media.episodeCount?.toString();
-            // score += this.scoreStringMatch(ScoreWeight.EpisodeCount, movie.nbEp.toString(), queryEpisodeCount);
-            // strOutput += `Episode Count: ${movie.nbEp} VS ${queryEpisodeCount}, Score: ${score}\n`;
+            // RELEASE DATE
+            const queryReleaseDate = opts.year?.toString();
+            if(queryReleaseDate)
+            {
+                score += this.scoreStringMatch(ScoreWeight.ReleaseDate, movie.details.releaseDate, queryReleaseDate);
+                strOutput += `Release Date: ${movie.details.releaseDate} VS ${queryReleaseDate}, Current Score: ${score}\n`;
+            }
+            else
+                balance++;
+            
+            // EPISODE COUNT
+            const queryEpisodeCount = opts.media.episodeCount?.toString();
+            if(queryEpisodeCount)
+            {
+                score += this.scoreStringMatch(ScoreWeight.EpisodeCount, movie.nbEp.toString(), queryEpisodeCount);
+                strOutput += `Episode Count: ${movie.nbEp} VS ${queryEpisodeCount}, Current Score: ${score}\n`;
+            }
+            else
+                balance++;
+            
+            if(balance > 0)
+            {
+                // without balance it is 3/3
+                // with balance it is 3/2
+                // need to balance to /3
+                score = score * (3 / (3 - balance));
+            }
 
             console.log(`Movie: ${movie.title}\n${strOutput}Total Score: ${score}\n--------------------`);
 
@@ -209,9 +216,13 @@ class Provider {
     }
 
     private async findMediaUrls(type: VideoSourceType, html, serverUrl: string, resolutionMatch?: RegExpMatchArray, unpacked?: string): Promise<VideoSource[] | VideoSource | undefined> {
-        let matchPattern = new RegExp(`https?:\/\/[^'"]+\\.${type}(?:\\?[^\s'"]*)?(?:#[^\s'"]*)?`, "g");
-        let VideoMatch = html.match(matchPattern) || unpacked?.match(matchPattern)
-            || html.match(new RegExp(`"([^"]+\\.${type})"`, "g")) || unpacked?.match(new RegExp(`"([^"]+\\.${type})"`, "g"));
+
+        const regex = new RegExp('https?:\\/\\/[^\'"]+\\.' + type + '(?:\\?[^\\s\'"]*)?(?:#[^\\s\'"]*)?', 'g');
+
+        let VideoMatch = html.match(regex)
+        || unpacked?.match(regex)
+        || html.match(new RegExp(`"([^"]+\\.${type})"`, "g")) 
+        || unpacked?.match(new RegExp(`"([^"]+\\.${type})"`, "g"));
 
         if (VideoMatch) {
             if (!VideoMatch.some(url => url.startsWith("http"))) {
@@ -222,7 +233,7 @@ class Provider {
             if (VideoMatch.length > 1) {
                 // If found multiple, euhm we are cooked... idk yet let me think of it lmao
                 console.warn("Found multiple m3u8 URLs:", VideoMatch);
-                // for take the first one idk
+                // for now take the first one idk
                 VideoMatch.forEach(element => {
                     if (VideoMatch[0] !== element) {
                         VideoMatch.pop();
@@ -233,56 +244,60 @@ class Provider {
                 console.log("Found m3u8 URL:", VideoMatch[0]);
             }
 
-            // fetch the match to see if the m3u8 is main or extension
-            // get the referer of the ServerUrl
-            const ref = serverUrl.split("/").slice(0, 3).join("/");
-            const req = await fetch(`${this.SEANIME_API}${encodeURIComponent(VideoMatch[0])}`);
-            let reqHtml = await req.text();
-            reqHtml = decodeURIComponent(reqHtml);
-            // console.log("Fetched m3u8 content:", reqHtml);
-            // console.log("Fetched m3u8 content:", reqHtml);
-            let qual = "";
-            let url = "";
-            const videos: VideoSource[] = [];
-            if (reqHtml.includes("#EXTM3U")) {
-                reqHtml.split("\n").forEach(line => {
-                    if (line.startsWith("#EXT-X-STREAM-INF")) {
-                        qual = line.split("RESOLUTION=")[1]?.split(",")[0] || "unknown";
-                        const height = parseInt(qual.split("x")[1]) || 0;
+            if (VideoMatch[0].includes(`master.${type}`)) {
+                // fetch the match to see if the m3u8 is main or extension
+                // get the referer of the ServerUrl
+                const ref = serverUrl.split("/").slice(0, 3).join("/");
+                const req = await fetch(`${this.SEANIME_API}${encodeURIComponent(VideoMatch[0])}`);
+                let reqHtml = await req.text();
+                reqHtml = decodeURIComponent(reqHtml);
+                let qual = "";
+                let url = "";
+                const videos: VideoSource[] = [];
+                if (reqHtml.includes("#EXTM3U")) {
+                    reqHtml.split("\n").forEach(line => {
+                        if (line.startsWith("#EXT-X-STREAM-INF")) {
+                            qual = line.split("RESOLUTION=")[1]?.split(",")[0] || "unknown";
+                            const height = parseInt(qual.split("x")[1]) || 0;
 
-                        if (height >= 1080) {
-                            qual = "1080p";
-                        } else if (height >= 720) {
-                            qual = "720p";
-                        } else if (height >= 480) {
-                            qual = "480p";
-                        } else if (height >= 360) {
-                            qual = "360p";
-                        } else {
-                            qual = "unknown";
+                            if (height >= 1080) {
+                                qual = "1080p";
+                            } else if (height >= 720) {
+                                qual = "720p";
+                            } else if (height >= 480) {
+                                qual = "480p";
+                            } else if (height >= 360) {
+                                qual = "360p";
+                            } else {
+                                qual = "unknown";
+                            }
                         }
-                    }
-                    else if (line.startsWith("/api/v1/proxy?url=http")) {
-                        // remove /api/v1/proxy?url=
-                        url = line.replace("/api/v1/proxy?url=", "");
-                        // console.log("Line:", url);
-                    }
+                        else if (line.startsWith("/api/v1/proxy?url=http")) {
+                            url = line.replace("/api/v1/proxy?url=", "");
+                        }
 
-                    if (url && qual) {
-                        videos.push({
-                            url: url,
-                            type: type,
-                            quality: qual,
-                            subtitles: []
-                        })
-                        url = "";
-                        qual = "";
-                    }
-                });
+                        if (url && qual) {
+                            videos.push({
+                                url: url,
+                                type: type,
+                                quality: `${qual} (${this._Server})`,
+                                subtitles: []
+                            })
+                            url = "";
+                            qual = "";
+                        }
+                    });
+                }
+
+                if (videos.length > 0) {
+                    return videos;
+                }
+                else {
+                    console.warn("m3u8 master is not in a correct format")
+                }
             }
-
-            if (videos.length > 0) {
-                return videos;
+            else {
+                console.warn("No master m3u8 URL found");
             }
 
             return {
@@ -309,6 +324,7 @@ class Provider {
         // special case Dean Edwards’ Packer
         // .match(/eval\(function\(p,a,c,k,e,d\)(.*?)\)\)/s);
         function unpack(p, a, c, k) { while (c--) if (k[c]) p = p.replace(new RegExp('\\b' + c.toString(a) + '\\b', 'g'), k[c]); return p }
+        // regex is weird here so i did it manually
         function extractScripts(str: string): string[] {
             const results: string[] = [];
             const openTag = "<script type='text/javascript'>";
@@ -329,8 +345,8 @@ class Provider {
             return results;
         }
 
-        const scriptContents = extractScripts(html);
         let unpacked;
+        const scriptContents = extractScripts(html);
         for (const c of scriptContents) {
             let c2 = c;
             // change c for each 200 char put \n (it too long)
@@ -339,6 +355,7 @@ class Provider {
             }
             if (c.includes("eval(function(p,a,c,k,e,d)")) {
 
+                console.log("Unpacked has been found.");
                 const fullRegex = /eval\(function\([^)]*\)\{[\s\S]*?\}\(\s*'([\s\S]*?)'\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*'([\s\S]*?)'\.split\('\|'\)/;
                 const match = c2.match(fullRegex);
 
@@ -363,102 +380,19 @@ class Provider {
                         .replace(/%27/g, "'")
                         .replace(/%28/g, '(').replace(/%29/g, ')')
                         .replace(/%3B/g, ';');
-                    console.log("Unpacked has been found.");
                 }
             }
         }
 
         // look for resolution: [4 to 3 numbers]p, have " or [space] after p if its the [space] it must be between to [space]
+        // example: 1080p" or 1080p
         const resolutionMatch = html.match(/(\d{3,4})p(?=[" ])/) || unpacked?.match(/(\d{3,4})p(?=[" ])/);
         if (resolutionMatch) {
             const resolution = resolutionMatch[1];
             console.log("Found resolution:", resolution);
         }
 
-        // // look for .m3u8
-        // let m3u8Match = html.match(/https?:\/\/[^'"]+\.m3u8(?:\?[^\s'"]*)?(?:#[^\s'"]*)?/g) || unpacked?.match(/https?:\/\/[^'"]+\.m3u8(?:\?[^\s'"]*)?(?:#[^\s'"]*)?/g)
-        //     || html.match(/"([^"]+\.m3u8)"/g) || unpacked?.match(/"([^"]+\.m3u8)"/g);
-
-        // if (m3u8Match) {
-        //     if (!m3u8Match.some(url => url.startsWith("http"))) {
-        //         const serverurldomain = serverUrl.split("/").slice(0, 3).join("/");
-        //         m3u8Match = m3u8Match.map(url => `${serverurldomain}${url}`.replaceAll(`"`, ""));
-        //     }
-
-        //     if (m3u8Match.length > 1) {
-        //         // If found multiple, euhm we are cooked... idk yet let me think of it lmao
-        //         console.warn("Found multiple m3u8 URLs:", m3u8Match);
-        //         // for take the first one idk
-        //         m3u8Match.forEach(element => {
-        //             if (m3u8Match[0] !== element) {
-        //                 m3u8Match.pop();
-        //             }
-        //         });
-        //     }
-        //     else {
-        //         console.log("Found m3u8 URL:", m3u8Match[0]);
-        //     }
-
-        //     // fetch the match to see if the m3u8 is main or extension
-        //     // get the referer of the ServerUrl
-        //     const ref = serverUrl.split("/").slice(0, 3).join("/");
-        //     const req = await fetch(`${this.SEANIME_API}${encodeURIComponent(m3u8Match[0])}`);
-        //     let reqHtml = await req.text();
-        //     reqHtml = decodeURIComponent(reqHtml);
-        //     // console.log("Fetched m3u8 content:", reqHtml);
-        //     // console.log("Fetched m3u8 content:", reqHtml);
-        //     let qual = "";
-        //     let url = "";
-        //     const videos: VideoSource[] = [];
-        //     if (reqHtml.includes("#EXTM3U")) {
-        //         reqHtml.split("\n").forEach(line => {
-        //             if (line.startsWith("#EXT-X-STREAM-INF")) {
-        //                 qual = line.split("RESOLUTION=")[1]?.split(",")[0] || "unknown";
-        //                 const height = parseInt(qual.split("x")[1]) || 0;
-
-        //                 if (height >= 1080) {
-        //                     qual = "1080p";
-        //                 } else if (height >= 720) {
-        //                     qual = "720p";
-        //                 } else if (height >= 480) {
-        //                     qual = "480p";
-        //                 } else if (height >= 360) {
-        //                     qual = "360p";
-        //                 } else {
-        //                     qual = "unknown";
-        //                 }
-        //             }
-        //             else if (line.startsWith("/api/v1/proxy?url=http")) {
-        //                 // remove /api/v1/proxy?url=
-        //                 url = line.replace("/api/v1/proxy?url=", "");
-        //                 // console.log("Line:", url);
-        //             }
-
-        //             if (url && qual) {
-        //                 videos.push({
-        //                     url: url,
-        //                     type: "m3u8",
-        //                     quality: qual,
-        //                     subtitles: []
-        //                 })
-        //                 url = "";
-        //                 qual = "";
-        //             }
-        //         });
-        //     }
-
-        //     if (videos.length > 0) {
-        //         return videos;
-        //     }
-
-        //     return {
-        //         url: m3u8Match[0],
-        //         quality: resolutionMatch ? resolutionMatch[1] : "unknown",
-        //         type: "m3u8",
-        //         subtitles: []
-        //     };
-        // }
-
+        // look for .m3u8
         const m3u8Videos = await this.findMediaUrls("m3u8", html, serverUrl, resolutionMatch, unpacked);
         if (m3u8Videos !== undefined) {
             console.log("Found m3u8: ", m3u8Videos);
@@ -472,11 +406,7 @@ class Provider {
             return mp4Videos;
         }
 
-
-        // what do we do about the subtitles you may ask,
-        // welp, idk ahahahah... i'm probably laughing on my own, because pbly no one read this
-        console.log("No m3u8 or mp4 URLs found in the server URL:", serverUrl);
-
+        console.warn("No m3u8 or mp4 URLs found in the server URL:", serverUrl, ". Make sure this is true.");
         return [];
     }
 
@@ -545,7 +475,7 @@ class Provider {
         ) {
             return undefined;
         }
-        
+
 
         if (seasonNumber && seasonNumberOpts && seasonNumber !== seasonNumberOpts) {
             return undefined;
@@ -576,9 +506,7 @@ class Provider {
             seasonNumberOpts = parseInt(seasonMatch[1], 10);
             console.log("Found season number:", seasonNumberOpts);
         }
-        else
-        {
-            // put season 1
+        else {
             seasonNumberOpts = 1;
         }
 
@@ -593,10 +521,10 @@ class Provider {
                 tempquery = tempquery.split(/[\s:']+/).slice(0, -1).join(" ");
                 continue;
             }
-
             const parsedmovies = movies.map((_, el) => this.parseMovieElement(el, opts, seasonNumberOpts));
             const filteredMovies = parsedmovies.filter(m => m !== undefined && m !== null);
             moviesJson.push(...filteredMovies);
+
             const pagination = $("#dle-content").find(".search-page .berrors").text().trim();
             console.log("Pagination info:", pagination);
             if (pagination.includes("Résultats de la requête")) {
@@ -630,25 +558,12 @@ class Provider {
             }
         }
 
-        // if (movies.length() === 0) {
-        //     console.log("No search results found");
-        //     return [];
-        // }
 
         if (moviesJson && moviesJson.length > 0) {
             console.log(`Found ${moviesJson.length} movies matching the criteria with query: ${opts.query}`);
-            // if (moviesJson.length === 1) {
-            //     return <SearchResult[]>[{
-            //         id: moviesJson[0]?.link,
-            //         title: moviesJson[0]?.title,
-            //         url: moviesJson[0]?.link,
-            //         subOrDub: opts.dub ? "dub" : "sub",
-            //     }];
-            // }
-           
+
             const bestMovie = this.findBestTitle(moviesJson, opts);
             if (bestMovie) {
-                console.log("Best movie found:", bestMovie?.title);
                 return <SearchResult[]>[{
                     id: bestMovie?.link,
                     title: bestMovie?.title,
@@ -720,7 +635,8 @@ class Provider {
     }
 
     async findEpisodeServer(episode: EpisodeDetails, _server: string): Promise<EpisodeServer> {
-        // TODO FIX LULUSTREAM: 176702, dub 178680, sub 185213, dub 176508
+        // TODO: FIX vvide0 (its dood stream servers): 171018
+        this._Server = _server;
         const servers = episode.id.split(",");
         // get the right url server
         const serverUrl = servers.find(server => server.includes(_server));
@@ -747,6 +663,7 @@ class Provider {
                     server: _server + " (video not found)",
                     videoSources: <VideoSource[]>[
                         {
+                            // dummy video source
                             url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8",
                             type: "m3u8",
                             quality: "video not found",
