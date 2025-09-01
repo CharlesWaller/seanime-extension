@@ -280,7 +280,7 @@ class Provider {
                             videos.push({
                                 url: url,
                                 type: type,
-                                quality: `${qual} (${this._Server})`,
+                                quality: `${this._Server} - ${qual}`,
                                 subtitles: []
                             })
                             url = "";
@@ -290,7 +290,12 @@ class Provider {
                 }
 
                 if (videos.length > 0) {
-                    return videos;
+                    return videos.sort((a, b) => {
+                        const resolutionOrder = ["1080p", "720p", "480p", "360p", "unknown"];
+                        const aIndex = resolutionOrder.indexOf(a.quality.split(" ")[2]);
+                        const bIndex = resolutionOrder.indexOf(b.quality.split(" ")[2]);
+                        return aIndex - bIndex;
+                    });
                 }
                 else {
                     console.warn("m3u8 master is not in a correct format")
@@ -302,7 +307,7 @@ class Provider {
 
             return {
                 url: VideoMatch[0],
-                quality: resolutionMatch ? resolutionMatch[1] : "unknown",
+                quality: resolutionMatch ? resolutionMatch[1] : `${this._Server} - unknown`,
                 type: type,
                 subtitles: []
             };
