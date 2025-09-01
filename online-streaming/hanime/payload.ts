@@ -405,7 +405,7 @@ function parseHits(hits: string): SearchResult[] {
 // ---------- Main Class ----------
 class Provider {
     private readonly SEARCH_URL = "https://search.htv-services.com";
-    private readonly EPISODE_URL = "https://hanime.tv/rapi/v7/videos_manifests/";
+    private readonly EPISODE_URL = "https://h.freeanimehentai.net/api/v8/video?id=";
     private readonly API = "https://hanime.tv";
     private readonly REFERER_API = "https://player.hanime.tv";
 
@@ -462,9 +462,9 @@ class Provider {
             results.push(...parseHits(data.hits));
         }
 
-        if (results.length > 0) {
-            console.log(`Best match for "${opts.query}":\n> ${results.map(r => r.title).join("\n> ")}`);
-        }
+        // if (results.length > 0) {
+        //     console.log(`Best match for "${opts.query}":\n> ${results.map(r => r.title).join("\n> ")}`);
+        // }
 
         results.forEach(result => {
             result.id = result.url;
@@ -495,24 +495,13 @@ class Provider {
     async findEpisodeServer(episode: EpisodeDetails, _server: string): Promise<EpisodeServer> {
         if (!_server) return {} as EpisodeServer;
 
-        const req = await fetch(episode.url, {
-            headers: {
-                'x-signature': generateSignature(),
-                'x-time': Math.floor(Date.now() / 1000).toString(),
-                'x-signature-version': 'web2',
-                Cookie: "__ddg1_=;__ddg2_=;",
-                Referer: `${this.REFERER_API}`,
-                "Access-Control-Allow-Origin": "*"
-            }
-        });
+        const req = await fetch(episode.url);
 
         const result = await req.json();
         if (!result?.videos_manifest) {
-            console.log(`No videos manifest for ${episode.title}`);
-            return {} as EpisodeServer;
+            // console.log(`No videos manifest for ${episode.title}`);
+            return <EpisodeServer>{};
         }
-        console.log(JSON.stringify(result.videos_manifest, null, 2));
-
         const videos: VideoSource[] = [];
         result.videos_manifest.servers.forEach((serverElement: any) => {
             if (_server !== serverElement.name) return;

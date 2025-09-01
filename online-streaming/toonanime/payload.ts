@@ -1,6 +1,6 @@
 /// <reference path="../_external/.onlinestream-provider.d.ts" />
 /// <reference path="../_external/core.d.ts" />
-
+//#region type
 type ToonAnimeEpisodesDetails = {
     type: string;
     data:
@@ -143,6 +143,7 @@ type ToonData = {
     updated_at: string,
     created_at: string
 };
+//#endregion
 
 enum ToonAnimeServer {
     SIBNET = "sibnet",
@@ -153,163 +154,166 @@ enum ToonAnimeServer {
 
 const DecodeHtml = s => s.replace(/&#34;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&").replace(/([{,]\s*)([a-zA-Z0-9_]+)(\s*:)/g, '$1"$2"$3');
 
-async function FetchServerHandler(url: string, _server: string): Promise<EpisodeServer> {
-    const server : ToonAnimeServer = _server as ToonAnimeServer;
-    switch (server) {
-        case ToonAnimeServer.SIBNET:
-            return await FetchUrlSibnet(url);
-        case ToonAnimeServer.VIDCDN:
-            return await FetchUrlVidCDN(url);
-        case ToonAnimeServer.CDN1:
-            return await FetchUrlCDN1(url);
-        case ToonAnimeServer.VIDM:
-            return await FetchUrlVidM(url);
-        default:
-            return <EpisodeServer>{
-                server: _server,
-                headers: {},
-                videoSources: []
-            };
-    }
-}
+class Provider {
 
-async function FetchUrlSibnet(url: string): Promise<EpisodeServer> {
-    const req = await fetch(url);
-    const html = await req.text();
-    const $ = LoadDoc(html);
-
-    const videos: VideoSource[] = [];
-    const headers = {
-        Host: "video.sibnet.ru",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0",
-        Accept: "video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5",
-        "Accept-Language": "fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3",
-        Range: "bytes=0-",
-        "Sec-GPC": "1",
-        Connection: "keep-alive",
-        Referer: url,
-        Cookie: "__ddg1_=;__ddg2_=;",
-        "Sec-Fetch-Dest": "video",
-        "Sec-Fetch-Mode": "no-cors",
-        "Sec-Fetch-Site": "same-origin",
-        AcceptEncoding: "identity",
-        Priority: "u=0"
+    //#region Fetch
+    async FetchServerHandler(url: string, _server: string): Promise<EpisodeServer> {
+        const server: ToonAnimeServer = _server as ToonAnimeServer;
+        switch (server) {
+            case ToonAnimeServer.SIBNET:
+                return await this.FetchUrlSibnet(url);
+            case ToonAnimeServer.VIDCDN:
+                return await this.FetchUrlVidCDN(url);
+            case ToonAnimeServer.CDN1:
+                return await this.FetchUrlCDN1(url);
+            case ToonAnimeServer.VIDM:
+                return await this.FetchUrlVidM(url);
+            default:
+                return <EpisodeServer>{
+                    server: _server,
+                    headers: {},
+                    videoSources: []
+                };
+        }
     }
 
-    const ScriptItems = $(`script[type="text/javascript"]`);
-    for (let i = 0; i < ScriptItems.length(); i++) {
-        const ScriptContent = ScriptItems.eq(i).html();
-        if (ScriptContent) {
-            const PlayerContent = DecodeHtml(ScriptContent).split("player.src([")[1]?.split("]),")[0];
-            if (PlayerContent) {
-                const videoUrl = PlayerContent.split(",")[0]?.split(":")[1]?.trim().replace(/['"]/g, "");
+    async FetchUrlSibnet(url: string): Promise<EpisodeServer> {
+        const req = await fetch(url);
+        const html = await req.text();
+        const $ = LoadDoc(html);
 
-                if (videoUrl) {
-                    // CANNOT FIND A WAY TO GET VIDEO QUALITY
-                    videos.push({
-                        url: `https://video.sibnet.ru${videoUrl}`,
-                        type: "mp4",
-                        quality: "(sibnet) 720p",
-                        subtitles: []
-                    });
+        const videos: VideoSource[] = [];
+        const headers = {
+            Host: "video.sibnet.ru",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0",
+            Accept: "video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5",
+            "Accept-Language": "fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3",
+            Range: "bytes=0-",
+            "Sec-GPC": "1",
+            Connection: "keep-alive",
+            Referer: url,
+            Cookie: "__ddg1_=;__ddg2_=;",
+            "Sec-Fetch-Dest": "video",
+            "Sec-Fetch-Mode": "no-cors",
+            "Sec-Fetch-Site": "same-origin",
+            AcceptEncoding: "identity",
+            Priority: "u=0"
+        }
+
+        const ScriptItems = $(`script[type="text/javascript"]`);
+        for (let i = 0; i < ScriptItems.length(); i++) {
+            const ScriptContent = ScriptItems.eq(i).html();
+            if (ScriptContent) {
+                const PlayerContent = DecodeHtml(ScriptContent).split("player.src([")[1]?.split("]),")[0];
+                if (PlayerContent) {
+                    const videoUrl = PlayerContent.split(",")[0]?.split(":")[1]?.trim().replace(/['"]/g, "");
+
+                    if (videoUrl) {
+                        // CANNOT FIND A WAY TO GET VIDEO QUALITY
+                        videos.push({
+                            url: `https://video.sibnet.ru${videoUrl}`,
+                            type: "mp4",
+                            quality: "(sibnet) 720p",
+                            subtitles: []
+                        });
+                    }
                 }
             }
         }
+
+        return <EpisodeServer>{
+            server: ToonAnimeServer.SIBNET,
+            headers: headers,
+            videoSources: videos
+        };
     }
 
-    return <EpisodeServer>{
-        server: ToonAnimeServer.SIBNET,
-        headers: headers,
-        videoSources: videos
-    };
-}
+    async FetchUrlVidCDN(url?: string): Promise<EpisodeServer> {
+        return <EpisodeServer>{
+            server: ToonAnimeServer.VIDCDN,
+            headers: {
+                Referer: url,
+            },
+            videoSources: []
+        };
+    }
 
-async function FetchUrlVidCDN(url?: string): Promise<EpisodeServer> {
-    return <EpisodeServer>{
-        server: ToonAnimeServer.VIDCDN,
-        headers: {
-            Referer: url,
-        },
-        videoSources: []
-    };
-}
+    async FetchUrlCDN1(url?: string): Promise<EpisodeServer> {
+        return <EpisodeServer>{
+            server: ToonAnimeServer.CDN1,
+            headers: {
+                Referer: url,
+            },
+            videoSources: []
+        };
+    }
 
-async function FetchUrlCDN1(url?: string): Promise<EpisodeServer> {
-    return <EpisodeServer>{
-        server: ToonAnimeServer.CDN1,
-        headers: {
-            Referer: url,
-        },
-        videoSources: []
-    };
-}
+    async FetchUrlVidM(url: string): Promise<EpisodeServer> {
+        const req = await fetch(url);
+        const html = await req.text();
+        const $ = LoadDoc(html);
 
-async function FetchUrlVidM(url: string): Promise<EpisodeServer> {
-    const req = await fetch(url);
-    const html = await req.text();
-    const $ = LoadDoc(html);
+        const Scripts = $("script[type='text/javascript']");
+        const videos: VideoSource[] = [];
 
-    const Scripts = $("script[type='text/javascript']");
-    const videos: VideoSource[] = [];
+        for (let i = 0; i < Scripts.length(); i++) {
+            const ScriptContent = Scripts.eq(i).html();
+            if (ScriptContent) {
+                const PlayerContent = DecodeHtml(ScriptContent).split("player.setup(")[1]?.split(");")[0];
+                if (PlayerContent) {
+                    const fileSources = PlayerContent.split('"file":"')[1]?.split('"')[0];
+                    const req2 = await fetch(fileSources);
+                    const m3u8 = await req2.text();
 
-    for (let i = 0; i < Scripts.length(); i++) {
-        const ScriptContent = Scripts.eq(i).html();
-        if (ScriptContent) {
-            const PlayerContent = DecodeHtml(ScriptContent).split("player.setup(")[1]?.split(");")[0];
-            if (PlayerContent) {
-                const fileSources = PlayerContent.split('"file":"')[1]?.split('"')[0];
-                const req2 = await fetch(fileSources);
-                const m3u8 = await req2.text();
+                    let qual = "";
+                    let m = "";
 
-                let qual = "";
-                let m = "";
+                    m3u8.split("\n").forEach(line => {
+                        if (line.startsWith("#EXT-X-STREAM-INF")) {
+                            qual = line.split("RESOLUTION=")[1]?.split(",")[0] || "unknown";
+                            const width = parseInt(qual.split("x")[0]) || 0;
 
-                m3u8.split("\n").forEach(line => {
-                    if (line.startsWith("#EXT-X-STREAM-INF")) {
-                        qual = line.split("RESOLUTION=")[1]?.split(",")[0] || "unknown";
-                        const width = parseInt(qual.split("x")[0]) || 0;
-
-                        if (width >= 1920) {
-                            qual = "1080p";
-                        } else if (width >= 1280) {
-                            qual = "720p";
-                        } else if (width >= 640) {
-                            qual = "480p";
-                        } else if (width >= 320) {
-                            qual = "360p";
-                        } else {
-                            qual = "unknown";
+                            if (width >= 1920) {
+                                qual = "1080p";
+                            } else if (width >= 1280) {
+                                qual = "720p";
+                            } else if (width >= 640) {
+                                qual = "480p";
+                            } else if (width >= 320) {
+                                qual = "360p";
+                            } else {
+                                qual = "unknown";
+                            }
                         }
-                    }
-                    else if (line.startsWith("http")) {
-                        m = line;
-                    }
+                        else if (line.startsWith("http")) {
+                            m = line;
+                        }
 
-                    if (m && qual) {
-                        videos.push({
-                            url: m,
-                            type: "m3u8",
-                            quality: `(${ToonAnimeServer.VIDM}) ${qual}`,
-                            subtitles: []
-                        })
-                        m = "";
-                        qual = "";
-                    }
-                });
-                break;
+                        if (m && qual) {
+                            videos.push({
+                                url: m,
+                                type: "m3u8",
+                                quality: `(${ToonAnimeServer.VIDM}) ${qual}`,
+                                subtitles: []
+                            })
+                            m = "";
+                            qual = "";
+                        }
+                    });
+                    break;
+                }
             }
         }
+        return <EpisodeServer>{
+            server: ToonAnimeServer.VIDM,
+            headers: {
+                Referer: url,
+            },
+            videoSources: videos,
+        };
     }
-    return <EpisodeServer>{
-        server: ToonAnimeServer.VIDM,
-        headers: {
-            Referer: url,
-        },
-        videoSources: videos,
-    };
-}
+    //#endregion
 
-class Provider {
     private readonly SEARCH_URL = "https://api2.toonanime.biz/filter?";
     private readonly BASE_URL = "https://www.toonanime.biz/";
 
@@ -376,23 +380,21 @@ class Provider {
         id = id.split("{")[0];
 
         const episodes: EpisodeDetails[] = [];
+        // fuck it, fucking global variable doesnt work static too... tried everything i know
+        const html = await fetch(this.BASE_URL + id).then(res => res.text());
 
         for (let i = 1; i <= (number ? parseInt(number) : 1); i++) {
             episodes.push({
                 id: id,
                 number: i,
-                url: this.BASE_URL,
+                url: html,
             });
         }
-
         return episodes;
     }
 
     async findEpisodeServer(episode: EpisodeDetails, _server: string): Promise<EpisodeServer> {
-
-        async function GetServerUrl(server: string, baseurl: string, ep: number): Promise<string | undefined> {
-            const req = await fetch(baseurl);
-            const html = await req.text();
+        async function GetServerUrl(server: string, html: string, ep: number): Promise<string | undefined> {
             const $ = LoadDoc(html);
             const ScriptItems = $("script");
 
@@ -431,8 +433,7 @@ class Provider {
 
             return undefined;
         }
-        const ToonUrl = episode.url + episode.id;
-        const url = await GetServerUrl(_server, ToonUrl, episode.number);
+        const url = await GetServerUrl(_server, episode.url, episode.number);
         if (!url) {
             return <EpisodeServer>{
                 server: _server,
@@ -440,6 +441,6 @@ class Provider {
                 videoSources: []
             }
         }
-        return await FetchServerHandler(url, _server);
+        return await this.FetchServerHandler(url, _server);
     }
 }
