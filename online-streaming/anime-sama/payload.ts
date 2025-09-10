@@ -36,7 +36,7 @@ class Provider {
 
     //#region variables
 
-    readonly SEARCH_URL_2 = "https://anime-sama.fr/template-php/defaut/fetch.php";
+    readonly SEARCH_URL_2 = "https://anime-sama.org/template-php/defaut/fetch.php";
     // idk yet how to get the api url of seanime, so i just hardcoded it
     readonly SEANIME_API = "http://127.0.0.1:43211/api/v1/proxy?url=";
 
