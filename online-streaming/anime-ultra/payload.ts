@@ -298,10 +298,9 @@ class Provider {
                                 url = line.replace("/api/v1/proxy?url=", "");
                                 if (!VideoMatch)
                                     return undefined
-                                if(!url.startsWith("http"))
-                                {
+                                if (!url.startsWith("http")) {
                                     const baseUrl = VideoMatch[index].substring(0, VideoMatch[index].lastIndexOf('/'))
-                                    url = baseUrl +"/"+ url
+                                    url = baseUrl + "/" + url
                                 }
                                 console.log(url)
                             }
@@ -545,7 +544,8 @@ class Provider {
 
                     if ((seasonNumberOpts && seasonNumberOpts === seasonNum) ||
                         (partNumberOpts && partNumberOpts === partNum) ||
-                        (seasonNumberOpts && seasonNumberOpts === onylNum)) {
+                        (seasonNumberOpts && seasonNumberOpts === onylNum) ||
+                        (!seasonNumberOpts && !seasonNum && !partNumberOpts && !partNum && !onylNum)) {
                         movieList.push({ Title: title, Url: url });
                     }
                 }
