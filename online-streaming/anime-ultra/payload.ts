@@ -470,7 +470,7 @@ class Provider {
     //#region main
 
     async search(opts: SearchOptions): Promise<SearchResult[]> {
-        if (opts.query === opts.media.romajiTitle)
+        if (opts.query === opts.media.romajiTitle && opts.media.romajiTitle !== opts.media.englishTitle)
             return []
 
         const Lang = opts.dub ? "vf" : "vostfr";
