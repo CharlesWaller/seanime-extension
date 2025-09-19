@@ -36,7 +36,7 @@ class Provider {
 
     //#region variables
 
-    readonly SEARCH_URL_2 = "https://anime-sama.org/template-php/defaut/fetch.php";
+    readonly SEARCH_URL_2 = "https://anime-sama.fr/template-php/defaut/fetch.php";
     // idk yet how to get the api url of seanime, so i just hardcoded it
     readonly SEANIME_API = "http://127.0.0.1:43211/api/v1/proxy?url=";
 
@@ -410,7 +410,10 @@ class Provider {
             }
 
             console.log(movieUrl)
-
+            if(movieUrl.includes("anime-sama.org") === true) {
+                // replace .org to .fr
+                movieUrl = movieUrl.replace("anime-sama.org", "anime-sama.fr");
+            }
             const html2 = await fetch(movieUrl).then(res => res.text());
             let animesJson: { Title: string; Url: string }[] = [];
             const Regex = /panneauAnime\("([^"]+)", "([^"]+)"\);/g;
