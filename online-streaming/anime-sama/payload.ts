@@ -459,10 +459,15 @@ class Provider {
                 return [];
             }
 
-            const finalUrl = opts.dub ? movieUrl + "/" + BestAnimeTitle.Url.replace("/vostfr", "/vf") : movieUrl + "/" + BestAnimeTitle.Url;
-            if ((await fetch(finalUrl)).status !== 200 && (await fetch(finalUrl + "1")).status !== 200) {
-                console.log(`Failed to fetch ${opts.dub ? "dub" : "sub"} version of ${BestAnimeTitle.Title}`);
-                return [];
+            let finalUrl = opts.dub ? movieUrl + "/" + BestAnimeTitle.Url.replace("/vostfr", "/vf") : movieUrl + "/" + BestAnimeTitle.Url;
+            const vf = await fetch(finalUrl).then(res => res.status);
+            const vf1 = await fetch(finalUrl + "1").then(res => res.status);
+            if(vf !== 200)
+            {
+                if(vf1 === 200)
+                {
+                    finalUrl = finalUrl + "1";
+                }
             }
 
             return <SearchResult[]>[{
