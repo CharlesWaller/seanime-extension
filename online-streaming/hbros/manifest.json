@@ -1,0 +1,13 @@
+{
+    "id": "hentaibros-provider",
+    "name": "Hentaibros Anime Extension",
+    "version": "1.0.0",
+    "manifestURI": "",
+    "language": "typescript",
+    "type": "onlinestream-provider",
+    "description": "Provides seamless integration with the hentaibros catalog for online streaming within Seanime, enabling users to watch available titles directly from the platform.",
+    "author": "chuck is dope ",
+    "icon": "",
+    "website": "",
+    "lang": "en",
+    "payload":""
