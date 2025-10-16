@@ -30,10 +30,7 @@ class Provider {
         };
     }
 
-    /**
-     * 🔍 Search for anime/videos
-     * Returns only the first result
-     */
+    /** 🔍 Search for anime/videos (returns only the first result) */
     async search(opts: SearchOptions): Promise<SearchResult[]> {
         try {
             const query = typeof opts.query === "string" ? opts.query.trim() : "";
@@ -51,7 +48,6 @@ class Provider {
             const html = await res.text();
             const $ = LoadDoc(html);
 
-            // Only get the first article
             const el = $("article").first();
             if (!el || el.length === 0) return [];
 
@@ -59,7 +55,6 @@ class Provider {
             const rawTitle = anchor.find("header.entry-header span").text();
             const title = rawTitle ? rawTitle.trim() : "";
             const url = anchor.attr("href") || "";
-
             if (!url || !title) return [];
 
             const id = url.split("/").filter(Boolean).pop() || "";
@@ -79,9 +74,7 @@ class Provider {
         }
     }
 
-    /**
-     * 📜 Find episodes for a given anime/video
-     */
+    /** 📜 Find episodes for a given anime/video */
     async findEpisodes(id: string): Promise<EpisodeDetails[]> {
         const episodes: EpisodeDetails[] = [];
 
@@ -101,14 +94,12 @@ class Provider {
             const html = await res.text();
             const $ = LoadDoc(html);
 
-            // SAFE tempId extraction from og:url
             const ogUrl = $("head > meta[property='og:url']").attr("content");
             if (!ogUrl || typeof ogUrl !== "string") throw new Error("Anime tempId not found");
 
             const tempId = ogUrl.split("/").filter(Boolean).pop();
             if (!tempId) throw new Error("Failed to extract tempId");
 
-            // fetch first page of episodes
             const apiRes = await fetch(
                 `${this.api}/api?m=release&id=${tempId}&sort=episode_asc&page=1`,
                 { headers: { Cookie: "__ddg1_=;__ddg2_=" } }
@@ -125,7 +116,7 @@ class Provider {
                     if (!item.session) continue;
                     episodes.push({
                         id: `${item.session}$${id}`,
-                        number: item.episode || 1,
+                        number: parseInt(item.episode as any, 10) || 1,
                         title: item.title && item.title.length ? item.title : `Episode ${item.episode}`,
                         url,
                     });
@@ -145,7 +136,6 @@ class Provider {
             const pageResults = (await Promise.all(pagePromises)) as { data: EpisodeData[] }[];
             pageResults.forEach((page) => pushData(page.data));
 
-            // sort and filter episodes
             episodes.sort((a, b) => a.number - b.number);
             return episodes.filter((ep) => Number.isInteger(ep.number));
         } catch (err) {
@@ -154,35 +144,22 @@ class Provider {
         }
     }
 
-    /**
-     * 🎬 Get playable episode server
-     */
+    /** 🎬 Get playable episode server */
     async findEpisodeServer(episode: EpisodeDetails, _server: string): Promise<EpisodeServer> {
         try {
-            if (!episode?.id || typeof episode.id !== "string") {
-                throw new Error("Invalid episode ID");
-            }
+            if (!episode?.id) throw new Error("Invalid episode ID");
 
             const parts = episode.id.split("$");
-            const episodeId = parts[0];
+            const episodeSession = parts[0];
+            const animeId = parts[1];
 
-            if (!episodeId || typeof episodeId !== "string" || !episodeId.startsWith("http")) {
-                throw new Error("Invalid episode URL");
-            }
+            const url = `${this.api}/play/${animeId}/${episodeSession}`;
 
             const result: EpisodeServer = {
                 server: "kwik",
-                headers: {
-                    Referer: this.api,
-                    "User-Agent": "Mozilla/5.0",
-                },
+                headers: { Referer: this.api, "User-Agent": "Mozilla/5.0" },
                 videoSources: [
-                    {
-                        url: episodeId,
-                        type: "m3u8",
-                        quality: "default",
-                        subtitles: [],
-                    },
+                    { url, type: "m3u8", quality: "default", subtitles: [] }
                 ],
             };
 
