@@ -1,172 +1,125 @@
-/// <reference path=".onlinestream-provider.d.ts" />
-/// <reference path="./core.d.ts" />
+import { LoadDoc } from "crawlee";
+import {
+    OnlineStreamProvider,
+    SearchResult,
+    EpisodeDetails,
+    StreamSource,
+} from "@seanime/core";
 
-type EpisodeData = {
-    id: number;
-    episode: number;
-    title: string;
-    snapshot: string;
-    filler: number;
-    session: string;
-    created_at?: string;
-};
+export default class HentaibrosProvider extends OnlineStreamProvider {
+    id = "hentaibros";
+    name = "Hentaibros";
+    baseUrl = "https://hentaibros.net/";
+    api = this.baseUrl;
 
-type AnimeData = {
-    id: number;
-    title: string;
-    type: string;
-    year: number;
-    poster: string;
-    session: string;
-};
+    /**
+     * Search for anime titles on hentaibros
+     */
+    async search(query: string): Promise<SearchResult[]> {
+        const searchUrl = `${this.api}?s=${encodeURIComponent(query)}`;
+        const res = await fetch(searchUrl, {
+            headers: { "User-Agent": "Mozilla/5.0" },
+        });
 
-class Provider {
-    api = "https://hentaibros.net/";
+        if (!res.ok) throw new Error(`Failed to fetch search page: ${res.status}`);
 
-    getSettings(): Settings {
-        return {
-            episodeServers: ["kwik"],
-            supportsDub: false,
-        };
-    }
+        const html = await res.text();
+        const $ = LoadDoc(html);
+        const results: SearchResult[] = [];
 
-    /** 🔍 Search for anime/videos (returns only the first result) */
-    async search(opts: SearchOptions): Promise<SearchResult[]> {
-        try {
-            const query = typeof opts.query === "string" ? opts.query.trim() : "";
-            if (!query) return [];
+        $("article").each((_, el) => {
+            const title = $(el).find("h2 a").text().trim();
+            const url = $(el).find("h2 a").attr("href");
+            const img = $(el).find("img").attr("src");
 
-            const res = await fetch(`${this.api}?s=${encodeURIComponent(query)}`, {
-                headers: {
-                    "User-Agent": "Mozilla/5.0",
-                    Cookie: "__ddg1_=;__ddg2_=",
-                },
-            });
+            if (url && title) {
+                const idMatch = url.match(/\/([^/]+)\/?$/);
+                const id = idMatch ? idMatch[1] : title;
 
-            if (!res.ok) return [];
-
-            const html = await res.text();
-            const $ = LoadDoc(html);
-
-            const el = $("article").first();
-            if (!el || el.length === 0) return [];
-
-            const anchor = el.find("a").first();
-            const rawTitle = anchor.find("header.entry-header span").text();
-            const title = rawTitle ? rawTitle.trim() : "";
-            const url = anchor.attr("href") || "";
-            if (!url || !title) return [];
-
-            const id = url.split("/").filter(Boolean).pop() || "";
-            if (!id) return [];
-
-            return [
-                {
-                    subOrDub: "sub",
+                results.push({
                     id,
                     title,
                     url,
-                },
-            ];
-        } catch (err) {
-            console.error("Search failed:", err);
-            return [];
-        }
+                    image: img,
+                });
+            }
+        });
+
+        if (results.length === 0) throw new Error("No search results found");
+        return results;
     }
 
-    /** 📜 Find episodes for a given anime/video */
+    /**
+     * Get episodes for a selected anime
+     */
     async findEpisodes(id: string): Promise<EpisodeDetails[]> {
+        if (!id) throw new Error("Invalid anime id");
+
         const episodes: EpisodeDetails[] = [];
+        const animeUrl = `${this.api}${id}/`;
 
-        try {
-            if (!id || typeof id !== "string") throw new Error("Invalid anime id");
+        const res = await fetch(animeUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+        if (!res.ok) throw new Error(`Failed to load anime page: ${res.status}`);
 
-            const url = id.startsWith("http") ? id : `${this.api}${id}/`;
-            const res = await fetch(url, {
-                headers: {
-                    "User-Agent": "Mozilla/5.0",
-                    Cookie: "__ddg1_=;__ddg2_=",
-                },
-            });
+        const html = await res.text();
+        const $ = LoadDoc(html);
 
-            if (!res.ok) throw new Error(`Failed to load anime page: ${res.status}`);
+        // Find all episode links like <li><a href="/play/{slug}/{session}">Ep 1</a></li>
+        $("li a[href*='/play/']").each((_, el) => {
+            const href = $(el).attr("href") || "";
+            const text = $(el).text().trim();
+            const match = href.match(/\/play\/([^/]+)\/([^/]+)/);
 
-            const html = await res.text();
-            const $ = LoadDoc(html);
+            if (match) {
+                const animeSlug = match[1];
+                const session = match[2];
+                const numMatch = text.match(/\d+/);
+                const number = numMatch ? parseInt(numMatch[0], 10) : episodes.length + 1;
 
-            const ogUrl = $("head > meta[property='og:url']").attr("content");
-            if (!ogUrl || typeof ogUrl !== "string") throw new Error("Anime tempId not found");
+                episodes.push({
+                    id: `${session}$${animeSlug}`,
+                    number,
+                    title: text || `Episode ${number}`,
+                    url: `${this.api}play/${animeSlug}/${session}`,
+                });
+            }
+        });
 
-            const tempId = ogUrl.split("/").filter(Boolean).pop();
-            if (!tempId) throw new Error("Failed to extract tempId");
+        if (episodes.length === 0) throw new Error("No episodes found on page");
+        episodes.sort((a, b) => a.number - b.number);
 
-            const apiRes = await fetch(
-                `${this.api}/api?m=release&id=${tempId}&sort=episode_asc&page=1`,
-                { headers: { Cookie: "__ddg1_=;__ddg2_=" } }
-            );
-            if (!apiRes.ok) throw new Error(`Episode API request failed: ${apiRes.status}`);
-
-            const { last_page, data } = (await apiRes.json()) as {
-                last_page: number;
-                data: EpisodeData[];
-            };
-
-            const pushData = (items: EpisodeData[]) => {
-                for (const item of items) {
-                    if (!item.session) continue;
-                    episodes.push({
-                        id: `${item.session}$${id}`,
-                        number: parseInt(item.episode as any, 10) || 1,
-                        title: item.title && item.title.length ? item.title : `Episode ${item.episode}`,
-                        url,
-                    });
-                }
-            };
-
-            pushData(data);
-
-            // fetch remaining pages
-            const pageNumbers = Array.from({ length: Math.max(0, last_page - 1) }, (_, i) => i + 2);
-            const pagePromises = pageNumbers.map((page) =>
-                fetch(`${this.api}/api?m=release&id=${tempId}&sort=episode_asc&page=${page}`, {
-                    headers: { Cookie: "__ddg1_=;__ddg2_=" },
-                }).then((r) => r.json())
-            );
-
-            const pageResults = (await Promise.all(pagePromises)) as { data: EpisodeData[] }[];
-            pageResults.forEach((page) => pushData(page.data));
-
-            episodes.sort((a, b) => a.number - b.number);
-            return episodes.filter((ep) => Number.isInteger(ep.number));
-        } catch (err) {
-            console.error("findEpisodes failed:", err);
-            throw err;
-        }
+        return episodes;
     }
 
-    /** 🎬 Get playable episode server */
-    async findEpisodeServer(episode: EpisodeDetails, _server: string): Promise<EpisodeServer> {
-        try {
-            if (!episode?.id) throw new Error("Invalid episode ID");
+    /**
+     * Get stream source for an episode
+     */
+    async getStream(episodeId: string): Promise<StreamSource[]> {
+        if (!episodeId.includes("$")) throw new Error("Invalid episode ID format");
 
-            const parts = episode.id.split("$");
-            const episodeSession = parts[0];
-            const animeId = parts[1];
+        const [session, animeSlug] = episodeId.split("$");
+        const url = `${this.api}play/${animeSlug}/${session}`;
 
-            const url = `${this.api}/play/${animeId}/${episodeSession}`;
+        const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+        if (!res.ok) throw new Error(`Failed to load episode page: ${res.status}`);
 
-            const result: EpisodeServer = {
-                server: "kwik",
-                headers: { Referer: this.api, "User-Agent": "Mozilla/5.0" },
-                videoSources: [
-                    { url, type: "m3u8", quality: "default", subtitles: [] }
-                ],
-            };
+        const html = await res.text();
+        const $ = LoadDoc(html);
+        const sources: StreamSource[] = [];
 
-            return result;
-        } catch (err) {
-            console.error("findEpisodeServer failed:", err);
-            throw err;
-        }
+        $("iframe").each((_, el) => {
+            const src = $(el).attr("src");
+            if (src && src.startsWith("http")) {
+                sources.push({
+                    url: src,
+                    quality: "default",
+                    type: "sub",
+                    headers: { "Referer": this.baseUrl },
+                });
+            }
+        });
+
+        if (sources.length === 0) throw new Error("No stream sources found");
+        return sources;
     }
 }
